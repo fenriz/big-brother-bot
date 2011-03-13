@@ -144,7 +144,7 @@ class Setup:
             _sqlfile = self.raw_default('I could not find b3/sql/b3.sql. Please provide the full path and filename.')
             _sqlresult = self.executeSql(_sqlfile)
         # giving up...
-        if _sqlresult == 'notfound':
+        if _sqlresult in ['notfound', 'couldnotopen']:
             self.add_buffer('Could not open SQL file, you will need to import the database tables manually')
 
         self.add_set("bot_name", self.read_element('b3', 'bot_name', 'b3'), "Name of the bot")
@@ -362,16 +362,20 @@ class Setup:
 
     def load_template(self):
         """ Load an existing config file or use the packaged examples"""
-        if functions.main_is_frozen():
-            self._configpath = os.environ['ALLUSERSPROFILE'] + '\\BigBrotherBot\\'
+        if os.path.exists('b3/conf'):
+            self._configpath = 'b3/'
+        # perhaps setup is executed directly
+        elif os.path.exists('conf/'):
+            self._configpath = ''
+        elif functions.main_is_frozen():
+            self._configpath = os.environ['ALLUSERSPROFILE'] + '/BigBrotherBot/'
         else:
-            self._configpath = 'b3\\'
-        if self._set_parser == 'bfbc2':
-            _dflttemplate = self._configpath + 'conf\\b3.bfbc2_example.xml'
-        elif self._set_parser == 'moh':
-            _dflttemplate = self._configpath + 'conf\\b3.moh_example.xml'
-        else:
-            _dflttemplate = self._configpath + 'conf\\b3.distribution.xml'
+            self._configpath = self.raw_default("Could not locate the config folder, please provide the full path (using /)").rstrip('/') + '/'
+
+        # load the template based on the parser the user just chose
+        _dflttemplate = self._configpath + 'conf/templates/b3.' + self._set_parser + '.tpl'
+        
+
         if self._template != '':
             # means we just backed-up an old config with the same name
             _result = self.raw_default("Do you want to use the values from the backed-up config (%s)?"
@@ -605,7 +609,8 @@ class Setup:
                 try:
                     f = open(sqlFile, 'r')
                 except Exception:
-                    return 'could_not_open'
+                    self.db.close()
+                    return 'couldnotopen'
                 sql_text = f.read()
                 f.close()
                 sql_statements = sql_text.split(';')
@@ -615,7 +620,8 @@ class Setup:
                     except Exception:
                         pass
             else:
-                raise Exception('sqlFile does not exist: %s' %sqlFile)
+                self.db.close()
+                return 'notfound'
             self.db.close()
         else:
             self.add_buffer('Connection to the database failed. Check the documentation how to add the database tables from %s manually.\n' %sqlFile)
